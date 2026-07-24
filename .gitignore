@@ -1,0 +1,87 @@
+# Secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+secrets/
+credentials/
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+
+# Coverage and test artifacts
+.coverage
+.coverage.*
+coverage.xml
+test-results.xml
+htmlcov/
+
+# Runtime data
+data/
+uploads/
+logs/
+tmp/
+temp/
+exports/
+*.log
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# ChromaDB
+chroma/
+chroma_db/
+chroma_data/
+data/chroma/
+.chroma/
+
+# Model caches and files
+models/
+model_cache/
+huggingface/
+.huggingface/
+sentence_transformers/
+*.bin
+*.safetensors
+
+# SonarQube and scanner data
+.sonar/
+.scannerwork/
+sonarqube/
+sonarqube-*/
+sonar-scanner/
+report-task.txt
+
+# IDE files
+.vscode/
+.idea/
+*.code-workspace
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+
+# Temporary Office files
+~$*.docx
+~$*.xlsx
+~$*.pptx
