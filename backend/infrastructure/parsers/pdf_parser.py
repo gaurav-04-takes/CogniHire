@@ -1,3 +1,26 @@
+"""
+PDF parsing implementation.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Extracts text from PDF documents while attempting to preserve layout
+    and reading order using PyMuPDF.
+
+Data flow:
+    Receives raw PDF byte content from the ingestion pipeline.
+    Returns a ParsedDocument containing normalized string content.
+
+Key dependencies:
+    - fitz (PyMuPDF)
+
+Side effects:
+    - In-memory PDF parsing.
+
+Related modules:
+    - backend.core.interfaces.parser
+"""
 import fitz # PyMuPDF
 import re
 from typing import Dict, Any
@@ -5,10 +28,29 @@ from backend.core.interfaces.parser import IDocumentParser
 from backend.core.domain.document import Document, ParsedDocument, DocumentType
 
 class PDFDocumentParser(IDocumentParser):
+    """
+    Parses a PDF document using PyMuPDF.
+    
+    Belongs to the infrastructure layer. Configured via dependency injection
+    when IDocumentParser is needed for PDF files.
+    """
     def parse(self, document: Document) -> ParsedDocument:
         """
         Parses a PDF document using PyMuPDF.
         Extracts raw text while attempting to preserve layout and reading order.
+
+        Preserve page numbers before joining text because citations depend on the
+        original page where each chunk was extracted (though we inject it as a text marker).
+
+        Args:
+            document: The Document domain object containing PDF bytes.
+
+        Returns:
+            A ParsedDocument containing the extracted text. The doc_type is
+            initially UNKNOWN, and sections are empty.
+
+        Raises:
+            RuntimeError: If PyMuPDF fails to open or read the byte stream.
         """
         text_content = ""
         metadata: Dict[str, Any] = {}
@@ -43,7 +85,12 @@ class PDFDocumentParser(IDocumentParser):
         )
         
     def _clean_text(self, text: str) -> str:
-        """Removes page artifacts and normalizes spacing."""
+        """
+        Removes page artifacts and normalizes spacing.
+        
+        Collapse repeated horizontal whitespace while preserving line boundaries.
+        Section detection relies on headings remaining on separate lines.
+        """
         # Replace multiple spaces with a single space
         text = re.sub(r' +', ' ', text)
         # Replace 3 or more newlines with double newlines

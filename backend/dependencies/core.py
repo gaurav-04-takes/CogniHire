@@ -1,3 +1,20 @@
+"""
+Dependency Injection Container (Core).
+
+Architectural layer:
+    API (Dependency Injection).
+
+Purpose:
+    Acts as the composition root for the application. Wires together concrete
+    infrastructure implementations and injects them into application use cases.
+    Maintains singleton instances for heavyweight components like models and vector stores.
+
+Data flow:
+    FastAPI Depends() -> get_use_case() -> assembles use case using singletons -> returns instance.
+
+Related modules:
+    - backend.api.*
+"""
 from backend.infrastructure.parsers.pdf_parser import PDFDocumentParser
 from backend.infrastructure.parsers.docx_parser import DOCXDocumentParser
 from backend.infrastructure.classifiers.rule_based_classifier import RuleBasedDocumentClassifier
@@ -30,7 +47,7 @@ from backend.application.services.analysis.interview_question_service import Int
 from backend.application.services.analysis.summary_service import ResumeSummaryService, JDSummaryService
 from backend.application.use_cases.hiring_analysis_pipeline import HiringAnalysisUseCase
 
-# Singletons
+# Singletons - instantiated once at startup to save memory and avoid model reload costs
 _pdf_parser = PDFDocumentParser()
 _docx_parser = DOCXDocumentParser()
 _classifier = RuleBasedDocumentClassifier()
@@ -41,9 +58,11 @@ _embedder = BGEEmbeddingProvider()
 _index_repo = ChromaIndexRepository(persist_directory=settings.CHROMADB_DIR, embedder=_embedder)
 
 def get_index_repository() -> ChromaIndexRepository:
+    """FastAPI dependency yielding the singleton vector store repository."""
     return _index_repo
 
 def get_ingest_document_use_case() -> IngestDocumentUseCase:
+    """FastAPI dependency yielding a configured document ingestion pipeline."""
     return IngestDocumentUseCase(
         pdf_parser=_pdf_parser,
         docx_parser=_docx_parser,
@@ -66,6 +85,7 @@ _query_rewriter = QueryRewriter(llm_provider=_gemini_provider, prompt_manager=_p
 _context_builder = ContextBuilder()
 
 def get_chat_pipeline_use_case() -> ChatPipelineUseCase:
+    """FastAPI dependency yielding a configured conversational RAG pipeline."""
     return ChatPipelineUseCase(
         retriever=_rrf_retriever,
         reranker=_bge_reranker,
@@ -85,6 +105,7 @@ _resume_summary_service = ResumeSummaryService(llm_provider=_gemini_provider, pr
 _jd_summary_service = JDSummaryService(llm_provider=_gemini_provider, prompt_manager=_prompt_manager)
 
 def get_hiring_analysis_use_case() -> HiringAnalysisUseCase:
+    """FastAPI dependency yielding a configured structured hiring analysis pipeline."""
     return HiringAnalysisUseCase(
         index_repository=_index_repo,
         context_builder=_context_builder,

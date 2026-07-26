@@ -1,3 +1,15 @@
+"""
+Core interfaces module.
+
+Architectural layer:
+    Core interfaces.
+
+Purpose:
+    Exports all core interfaces to simplify imports across the application.
+    These abstractions define the contracts that the infrastructure layer
+    must implement and that the application layer depends upon, enforcing
+    the Dependency Inversion Principle.
+"""
 from .embedder import IEmbedder
 from .retriever import IRetriever
 from .reranker import IReranker

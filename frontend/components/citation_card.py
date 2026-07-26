@@ -1,6 +1,19 @@
+"""
+Streamlit Component: Citation Card.
+
+Architectural layer:
+    Frontend (UI Components).
+
+Purpose:
+    Renders an expandable card displaying the source documents and specific chunks
+    used by the RAG pipeline to generate an answer.
+"""
 import streamlit as st
 
 def citation_card(citations: list):
+    """
+    Renders a list of citation dictionaries as an interactive Streamlit expander.
+    """
     if not citations:
         return
         

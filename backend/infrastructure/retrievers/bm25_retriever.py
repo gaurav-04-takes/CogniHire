@@ -1,3 +1,25 @@
+"""
+BM25 lexical retrieval implementation.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Implements IRetriever to perform exact keyword matching using the BM25 algorithm.
+    Useful for exact matches on names, tools, or specific jargon where semantic
+    search falls short.
+
+Data flow:
+    Pulls candidate chunks from the Index Repository based on metadata filters,
+    tokenizes them, and calculates BM25 scores against the tokenized query.
+
+Key dependencies:
+    - rank_bm25
+    - backend.core.interfaces.retriever
+
+Related modules:
+    - backend.infrastructure.vectorstores.chroma_repository
+"""
 from typing import List, Dict, Any, Optional
 from rank_bm25 import BM25Plus
 from backend.core.interfaces.retriever import IRetriever
@@ -5,6 +27,9 @@ from backend.core.interfaces.index_repository import IIndexRepository
 from backend.core.domain.chunk import Chunk
 
 class BM25Retriever(IRetriever):
+    """
+    Lexical search retriever using BM25+.
+    """
     def __init__(self, index_repository: IIndexRepository):
         self.index_repository = index_repository
 
@@ -17,6 +42,16 @@ class BM25Retriever(IRetriever):
     ) -> List[Chunk]:
         """
         Retrieves relevant chunks using BM25 exact keyword matching.
+        
+        Args:
+            query: The raw search string.
+            collection_name: Vector store collection to pull candidates from.
+            filters: Pre-filtering criteria to reduce the BM25 search space.
+            top_k: Max number of results.
+            
+        Returns:
+            A list of Chunks sorted by BM25 score descending. Only chunks with 
+            scores > 0 are returned.
         """
         # Fetch candidate chunks from repository matching filters
         chunks = self.index_repository.get_chunks(collection_name=collection_name, filters=filters)

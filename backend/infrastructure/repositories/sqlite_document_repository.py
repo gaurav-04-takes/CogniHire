@@ -1,3 +1,28 @@
+"""
+SQLite Document Repository Implementation.
+
+Architectural layer:
+    Infrastructure (Repository).
+
+Purpose:
+    Implements the IDocumentRepository interface using a raw SQLite connection.
+    Manages persistence for document tracking metadata (not vector chunks).
+
+Data flow:
+    Maps DocumentRecord domain objects to SQL queries and executes them against
+    the configured SQLite database.
+
+Key dependencies:
+    - sqlite3
+    - backend.core.interfaces.document_repository.IDocumentRepository
+
+Side effects:
+    - Creates `documents.db` file if it doesn't exist.
+    - Mutates state in the `documents` table.
+
+Related modules:
+    - backend.core.domain.document
+"""
 import sqlite3
 import json
 from typing import List, Optional
@@ -6,11 +31,15 @@ from backend.core.domain.document import DocumentRecord, DocumentStatus, Documen
 from backend.core.interfaces.document_repository import IDocumentRepository
 
 class SQLiteDocumentRepository(IDocumentRepository):
+    """
+    Concrete repository implementation for SQLite document metadata storage.
+    """
     def __init__(self, db_path: str = "documents.db"):
         self.db_path = db_path
         self._init_db()
 
     def _init_db(self):
+        """Initializes the database schema if it doesn't already exist."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -27,6 +56,7 @@ class SQLiteDocumentRepository(IDocumentRepository):
             conn.commit()
 
     def _row_to_record(self, row) -> DocumentRecord:
+        """Translates a raw SQL row tuple into a DocumentRecord domain object."""
         return DocumentRecord(
             id=row[0],
             filename=row[1],
@@ -38,6 +68,12 @@ class SQLiteDocumentRepository(IDocumentRepository):
         )
 
     def save(self, record: DocumentRecord) -> None:
+        """
+        Inserts a new document record or updates an existing one.
+        
+        Args:
+            record: The document metadata to persist.
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -56,6 +92,15 @@ class SQLiteDocumentRepository(IDocumentRepository):
             conn.commit()
 
     def get(self, document_id: str) -> Optional[DocumentRecord]:
+        """
+        Retrieves a document record by its ID.
+        
+        Args:
+            document_id: The UUID of the document.
+            
+        Returns:
+            The DocumentRecord if found, else None.
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM documents WHERE id = ?", (document_id,))
@@ -65,6 +110,12 @@ class SQLiteDocumentRepository(IDocumentRepository):
         return None
 
     def get_all(self) -> List[DocumentRecord]:
+        """
+        Retrieves all document records, ordered newest first.
+        
+        Returns:
+            A list of DocumentRecord instances.
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM documents ORDER BY uploaded_at DESC")
@@ -72,6 +123,12 @@ class SQLiteDocumentRepository(IDocumentRepository):
             return [self._row_to_record(row) for row in rows]
 
     def delete(self, document_id: str) -> None:
+        """
+        Removes a document record from the database.
+        
+        Args:
+            document_id: The UUID of the document to delete.
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM documents WHERE id = ?", (document_id,))

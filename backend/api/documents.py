@@ -1,3 +1,18 @@
+"""
+FastAPI Document Routes.
+
+Architectural layer:
+    API (Controllers).
+
+Purpose:
+    Exposes endpoints for uploading, reclassifying, deleting, and listing documents.
+    Handles background task dispatch for the asynchronous ingestion pipeline.
+
+Key dependencies:
+    - backend.infrastructure.database.models
+    - backend.application.use_cases.ingest_document
+    - backend.dependencies.core
+"""
 import traceback
 from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
@@ -39,6 +54,10 @@ def process_document_background(
     use_case: IngestDocumentUseCase,
     doc_type_override: Optional[DocumentType] = None
 ):
+    """
+    Background worker function that executes the ingestion pipeline.
+    Must maintain its own DB session since FastAPI closes the request session.
+    """
     from backend.infrastructure.database.session import SessionLocal
     db = SessionLocal()
     
@@ -97,6 +116,10 @@ async def upload_document(
     db: Session = Depends(get_db),
     use_case: IngestDocumentUseCase = Depends(get_ingest_document_use_case)
 ):
+    """
+    Accepts file uploads, saves them to disk, initializes tracking records,
+    and queues background processing.
+    """
     ext = file.filename.split('.')[-1].lower() if file.filename else ""
     if ext not in ['pdf', 'docx', 'doc']:
         raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported.")
@@ -148,6 +171,9 @@ async def upload_document(
 
 @router.get("", response_model=DocumentListResponse)
 async def get_documents(db: Session = Depends(get_db)):
+    """
+    Lists all uploaded documents with their current processing status.
+    """
     docs = db.query(DocumentModel).order_by(desc(DocumentModel.uploaded_at)).all()
     results = []
     for doc in docs:
@@ -168,6 +194,9 @@ async def get_documents(db: Session = Depends(get_db)):
 
 @router.get("/{doc_id}")
 async def get_document(doc_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieves details for a specific document by its UUID.
+    """
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -187,6 +216,9 @@ async def get_document(doc_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{doc_id}/status")
 async def get_document_status(doc_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieves just the processing status for a specific document.
+    """
     job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == doc_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Document job not found")
@@ -205,6 +237,9 @@ async def delete_document(
     db: Session = Depends(get_db),
     index_repo: IIndexRepository = Depends(get_index_repository)
 ):
+    """
+    Deletes a document from the SQL tracking DB and removes its chunks from ChromaDB.
+    """
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -235,6 +270,10 @@ async def reclassify_document(
     use_case: IngestDocumentUseCase = Depends(get_ingest_document_use_case),
     index_repo: IIndexRepository = Depends(get_index_repository)
 ):
+    """
+    Triggers a re-ingestion of the document with an explicit manual classification type,
+    wiping the old vector embeddings and generating new ones.
+    """
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")

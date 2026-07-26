@@ -1,12 +1,40 @@
+"""
+Rule-based document classification.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Implements a weighted keyword-based approach to determine if a document
+    is a Resume or a Job Description.
+
+Data flow:
+    Takes raw document text from the ingestion pipeline and outputs a 
+    ClassificationResult containing the likely type and confidence scores.
+
+Key dependencies:
+    - DocumentType, ClassificationResult domain models.
+
+Related modules:
+    - backend.core.interfaces.classifier
+"""
 import re
 from backend.core.interfaces.classifier import IDocumentClassifier
 from backend.core.domain.document import DocumentType, ClassificationResult
 
 class RuleBasedDocumentClassifier(IDocumentClassifier):
+    """
+    Weighted keyword classifier for resumes and JDs.
+    
+    Belongs to the infrastructure layer and implements IDocumentClassifier.
+    Calculates separate scores for Resume indicators and JD indicators, then
+    compares them using confidence and margin thresholds.
+    """
     def __init__(self, confidence_threshold: float = 2.0, margin_threshold: float = 1.0):
         self.confidence_threshold = confidence_threshold
         self.margin_threshold = margin_threshold
         
+        # Strong indicators immediately signal the likely document type
         self.strong_resume = [
             "professional summary", "career objective", "work experience", 
             "employment history", "projects", "certifications", "contact details",
@@ -21,11 +49,26 @@ class RuleBasedDocumentClassifier(IDocumentClassifier):
             "employment type", "salary range"
         ]
         
+        # "Skills" appears frequently in both resumes and job descriptions, so the
+        # term contributes only a weak score and cannot classify a document alone.
         self.weak_ambiguous = [
             "skills", "experience", "education", "qualifications", "technologies"
         ]
 
     def classify(self, text: str) -> ClassificationResult:
+        """
+        Classify text based on predefined keyword occurrence.
+
+        Args:
+            text: The normalized full text of the document.
+
+        Returns:
+            A ClassificationResult object. If the difference between scores
+            (confidence) is too small, or the max score is below threshold,
+            the result defaults to DocumentType.UNKNOWN.
+            Ambiguous results remain UNKNOWN rather than defaulting to Resume. This
+            prevents a JD from being indexed with Resume section rules.
+        """
         text_lower = text.lower()
         
         matched_resume = []

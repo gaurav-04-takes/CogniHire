@@ -1,7 +1,20 @@
+"""
+Streamlit Component: Skill Gap Table.
+
+Architectural layer:
+    Frontend (UI Components).
+
+Purpose:
+    Renders structured tables and lists detailing missing skills and ATS keyword analysis
+    for a candidate compared to a job description.
+"""
 import streamlit as st
 import pandas as pd
 
 def skill_gap_table(skills_data: dict, ats_data: dict):
+    """
+    Renders pandas dataframes and markdown lists for skill gaps and ATS compatibility.
+    """
     st.subheader("Skill Gap & ATS Analysis")
     
     missing_skills = skills_data.get("missing_skills", [])

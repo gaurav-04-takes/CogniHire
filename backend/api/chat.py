@@ -1,3 +1,17 @@
+"""
+FastAPI Chat Routes.
+
+Architectural layer:
+    API (Controllers).
+
+Purpose:
+    Exposes endpoints for the conversational RAG interface. Handles synchronous
+    chat, streaming chat, and chat history management.
+
+Key dependencies:
+    - backend.dependencies.core
+    - backend.application.use_cases.chat_pipeline
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Optional
 from pydantic import BaseModel
@@ -24,6 +38,10 @@ async def chat(
     background_tasks: BackgroundTasks,
     use_case: ChatPipelineUseCase = Depends(get_chat_pipeline_use_case)
 ):
+    """
+    Synchronous chat endpoint. Returns the complete response and citations.
+    Triggers RAGAS background evaluation asynchronously.
+    """
     try:
         response_text, assistant_msg, session = await use_case.execute(
             query=request.query,
@@ -57,6 +75,9 @@ async def chat_stream(
     request: ChatRequest,
     use_case: ChatPipelineUseCase = Depends(get_chat_pipeline_use_case)
 ):
+    """
+    Streaming chat endpoint. Yields SSE events as the LLM generates tokens.
+    """
     try:
         generator = use_case.execute_stream(
             query=request.query,
@@ -69,6 +90,9 @@ async def chat_stream(
 
 @router.get("/{session_id}/history")
 async def get_history(session_id: str):
+    """
+    Retrieves the complete message history for a given chat session.
+    """
     session = _chat_session_repo.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -77,6 +101,9 @@ async def get_history(session_id: str):
 
 @router.delete("/{session_id}")
 async def delete_session(session_id: str):
+    """
+    Deletes a chat session from memory/storage.
+    """
     session = _chat_session_repo.get(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")

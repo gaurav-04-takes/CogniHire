@@ -1,3 +1,14 @@
+"""
+Streamlit Page: Document Ingestion (Upload).
+
+Architectural layer:
+    Frontend (UI Page).
+
+Purpose:
+    Provides a drag-and-drop interface for users to upload resumes and job descriptions.
+    Includes polling logic to track the background ingestion status and allows
+    manual classification overrides for failed auto-detections.
+"""
 import streamlit as st
 import time
 from frontend.services.document_service import DocumentService

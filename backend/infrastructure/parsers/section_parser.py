@@ -1,10 +1,42 @@
+"""
+Rule-based section parsing implementation.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Divides continuous document text into distinct semantic sections using
+    regex patterns tailored for resumes and job descriptions.
+
+Data flow:
+    Receives raw text and document classification from the pipeline.
+    Returns a list of DocumentSection domain objects.
+
+Key dependencies:
+    - Python standard `re` module.
+
+Related modules:
+    - backend.core.interfaces.section_parser
+"""
 import re
 from typing import List
 from backend.core.interfaces.section_parser import ISectionParser
 from backend.core.domain.document import DocumentSection, DocumentType
 
 class RuleBasedSectionParser(ISectionParser):
+    """
+    Extracts logical sections based on hardcoded regular expressions.
+    
+    Implements ISectionParser. The patterns used depend on whether the
+    classifier previously identified the document as a Resume or JD.
+    """
     def parse_sections(self, text: str, doc_type: DocumentType) -> List[DocumentSection]:
+        """
+        Parse raw text into semantic sections based on document type.
+        
+        Delegates to specific pattern lists based on the doc_type enum.
+        If unknown, the entire document is treated as a single section.
+        """
         if doc_type == DocumentType.RESUME:
             return self._parse_resume_sections(text)
         elif doc_type == DocumentType.JOB_DESCRIPTION:
@@ -19,6 +51,7 @@ class RuleBasedSectionParser(ISectionParser):
             )]
             
     def _parse_resume_sections(self, text: str) -> List[DocumentSection]:
+        """Identify Resume sections like Experience, Education, or Skills."""
         # Common resume section headers (case insensitive)
         headers = [
             r"^summary", r"^professional summary", r"^objective", 
@@ -32,6 +65,7 @@ class RuleBasedSectionParser(ISectionParser):
         return self._extract_sections(text, headers)
         
     def _parse_jd_sections(self, text: str) -> List[DocumentSection]:
+        """Identify JD sections like Responsibilities, Requirements, or Benefits."""
         # Common JD section headers
         headers = [
             r"^overview", r"^about the role", r"^about us",
@@ -44,6 +78,13 @@ class RuleBasedSectionParser(ISectionParser):
         return self._extract_sections(text, headers)
         
     def _extract_sections(self, text: str, header_patterns: List[str]) -> List[DocumentSection]:
+        """
+        Apply a combined regular expression to locate headers.
+        
+        Remove per-pattern start anchors before combining patterns under one
+        multiline anchor. This allows headings with leading whitespace to match.
+        Optional colon matching is supported.
+        """
         sections = []
         # Compile a single regex that matches any of the headers on a new line
         # Use multiline to match start of lines, allow some whitespace

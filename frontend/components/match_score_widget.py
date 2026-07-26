@@ -1,7 +1,20 @@
+"""
+Streamlit Component: Match Score Widget.
+
+Architectural layer:
+    Frontend (UI Components).
+
+Purpose:
+    Renders a visual representation of a candidate's match score against a job description,
+    including a top-level gauge chart and metric breakdowns for specific dimensions.
+"""
 import streamlit as st
 import plotly.graph_objects as go
 
 def match_score_widget(match_data: dict):
+    """
+    Renders the overall match score gauge and dimensional score columns.
+    """
     st.subheader("Match Score Analysis")
     
     overall = match_data.get("overall_score", 0)

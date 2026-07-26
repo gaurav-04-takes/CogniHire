@@ -1,3 +1,27 @@
+"""
+ChromaDB vector store implementation.
+
+Architectural layer:
+    Infrastructure (Database access).
+
+Purpose:
+    Implements IIndexRepository to persist and query document chunks and their 
+    embeddings using ChromaDB as the underlying vector database.
+
+Data flow:
+    Accepts domain Chunk objects, strips complex objects to conform to Chroma's
+    metadata limitations, and writes to local disk. Returns Chunk objects on read.
+
+Key dependencies:
+    - chromadb
+    - backend.core.interfaces.index_repository
+
+Side effects:
+    - Writes to the local filesystem (persist_directory).
+
+Related modules:
+    - backend.infrastructure.embedders.bge_embedder
+"""
 import chromadb
 from typing import List, Dict, Any, Optional
 from backend.core.interfaces.index_repository import IIndexRepository
@@ -5,12 +29,31 @@ from backend.core.domain.chunk import Chunk
 from backend.core.domain.document import DocumentType
 
 class ChromaIndexRepository(IIndexRepository):
+    """
+    Persistent ChromaDB index repository.
+    
+    Manages collection creation, document insertion (with embeddings),
+    deletion, and both dense and metadata-only querying.
+    """
     def __init__(self, persist_directory: str, embedder):
         # embedder should implement an interface compatible with Chroma's EmbeddingFunction
         # or we manually embed before inserting. We will manually embed in the pipeline.
         self.client = chromadb.PersistentClient(path=persist_directory)
         
     def index_chunks(self, chunks: List[Chunk], collection_name: str) -> None:
+        """
+        Inserts document chunks into a named Chroma collection.
+        
+        Extracts pre-computed embeddings from the chunk metadata. Removes 
+        complex metadata types (dicts, lists) to comply with Chroma's storage limits.
+        
+        Args:
+            chunks: List of populated Chunk domain objects.
+            collection_name: Target Chroma collection name.
+            
+        Side Effects:
+            Mutates state on disk in the Chroma persist directory.
+        """
         if not chunks:
             return
             
@@ -45,6 +88,13 @@ class ChromaIndexRepository(IIndexRepository):
             collection.add(ids=ids, documents=texts, metadatas=metadatas)
 
     def delete_document(self, document_id: str, collection_name: str) -> None:
+        """
+        Deletes all chunks belonging to a specific document ID.
+        
+        Args:
+            document_id: The UUID of the document to purge.
+            collection_name: The target collection.
+        """
         try:
             collection = self.client.get_collection(name=collection_name)
             collection.delete(where={"document_id": document_id})
@@ -52,6 +102,18 @@ class ChromaIndexRepository(IIndexRepository):
             pass # Collection doesn't exist
 
     def search(self, query_embedding: List[float], collection_name: str, filters: Optional[Dict[str, Any]] = None, top_k: int = 5) -> List[Chunk]:
+        """
+        Performs a dense vector similarity search.
+        
+        Args:
+            query_embedding: Dense float vector of the user's query.
+            collection_name: Target collection to search.
+            filters: Optional ChromaDB metadata filter dict.
+            top_k: Max number of results to return.
+            
+        Returns:
+            A list of Chunk domain objects mapped from Chroma's result dictionary.
+        """
         try:
             collection = self.client.get_collection(name=collection_name)
         except Exception:
@@ -80,6 +142,19 @@ class ChromaIndexRepository(IIndexRepository):
         return chunks
 
     def get_chunks(self, collection_name: str, filters: Optional[Dict[str, Any]] = None) -> List[Chunk]:
+        """
+        Retrieves chunks purely based on metadata filters, ignoring vectors.
+        
+        Used primarily by the BM25 retriever to pull candidate documents
+        before applying lexical scoring.
+        
+        Args:
+            collection_name: Target collection.
+            filters: ChromaDB metadata filter dict.
+            
+        Returns:
+            A list of matching Chunk objects.
+        """
         try:
             collection = self.client.get_collection(name=collection_name)
         except Exception:

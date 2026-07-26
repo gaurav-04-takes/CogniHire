@@ -1,3 +1,17 @@
+"""
+FastAPI Application Entrypoint.
+
+Architectural layer:
+    API (Framework Startup).
+
+Purpose:
+    Initializes the FastAPI application, mounts the main API router, configures CORS,
+    and sets up any required startup/shutdown hooks.
+
+Related modules:
+    - backend.api.router
+    - backend.config.settings
+"""
 import os
 # Workaround for corporate proxies blocking HuggingFace downloads
 os.environ['CURL_CA_BUNDLE'] = ''

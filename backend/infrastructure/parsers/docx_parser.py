@@ -1,3 +1,26 @@
+"""
+DOCX parsing implementation.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Extracts text and applies simplistic structure normalization to Microsoft 
+    Word (.docx) files using the python-docx library.
+
+Data flow:
+    Receives raw DOCX byte content from the document ingestion pipeline.
+    Returns a ParsedDocument containing normalized string content.
+
+Key dependencies:
+    - python-docx (as docx)
+
+Side effects:
+    - In-memory extraction (no direct file writes).
+
+Related modules:
+    - backend.core.interfaces.parser
+"""
 from docx import Document as DocxDocument
 import io
 import re
@@ -6,9 +29,30 @@ from backend.core.interfaces.parser import IDocumentParser
 from backend.core.domain.document import Document, ParsedDocument, DocumentType
 
 class DOCXDocumentParser(IDocumentParser):
+    """
+    Parses a DOCX document using python-docx.
+    
+    Belongs to the infrastructure layer. Instances are injected where
+    IDocumentParser is required for DOCX processing.
+    """
     def parse(self, document: Document) -> ParsedDocument:
         """
         Parses a DOCX document using python-docx.
+
+        Reads the raw byte stream from the Document domain model and iterates
+        through paragraphs. Basic list and heading styles are translated into
+        simple Markdown-like text equivalents.
+
+        Args:
+            document: The Document domain object containing DOCX bytes.
+
+        Returns:
+            A ParsedDocument containing the extracted text. The doc_type is
+            initially UNKNOWN, and sections are left empty for the downstream
+            pipeline to populate.
+
+        Raises:
+            RuntimeError: If python-docx cannot read the byte stream.
         """
         text_content = ""
         metadata: Dict[str, Any] = {}
@@ -46,7 +90,12 @@ class DOCXDocumentParser(IDocumentParser):
         )
 
     def _clean_text(self, text: str) -> str:
-        """Removes page artifacts and normalizes spacing."""
+        """
+        Removes page artifacts and normalizes spacing.
+        
+        Collapse repeated horizontal whitespace while preserving line boundaries.
+        Section detection relies on headings remaining on separate lines.
+        """
         text = re.sub(r' +', ' ', text)
         text = re.sub(r'\n{3,}', '\n\n', text)
         return text.strip()

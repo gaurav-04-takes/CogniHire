@@ -1,3 +1,24 @@
+"""
+SQLAlchemy Database Models.
+
+Architectural layer:
+    Infrastructure (Database).
+
+Purpose:
+    Defines the relational database schema using SQLAlchemy ORM. Models map to
+    underlying tables for persistent tracking of document ingestion, evaluation
+    results, feedback, and system metrics.
+
+Data flow:
+    ORM models instantiate into Python objects managed by the SQLAlchemy Session,
+    which flushes state changes to the configured relational database.
+
+Key dependencies:
+    - sqlalchemy
+
+Related modules:
+    - backend.infrastructure.database.session
+"""
 from sqlalchemy import Column, String, DateTime, Enum, Integer, Boolean, Text, Float
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -7,12 +28,16 @@ import uuid
 Base = declarative_base()
 
 class ProcessingStatus(str, enum.Enum):
+    """Enumeration for document ingestion pipeline status."""
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
 class DocumentModel(Base):
+    """
+    Tracks metadata for uploaded documents (resumes and JDs).
+    """
     __tablename__ = "documents"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -24,6 +49,9 @@ class DocumentModel(Base):
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class DocumentProcessingJobModel(Base):
+    """
+    Tracks the lifecycle and status of async background document processing jobs.
+    """
     __tablename__ = "document_processing_jobs"
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -36,6 +64,9 @@ class DocumentProcessingJobModel(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class AnalyticsEvent(Base):
+    """
+    Stores arbitrary analytics events for usage tracking.
+    """
     __tablename__ = "analytics_events"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     event_type = Column(String, nullable=False) # e.g., "document_uploaded", "query_executed"
@@ -43,6 +74,9 @@ class AnalyticsEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class SystemMetric(Base):
+    """
+    Stores point-in-time system metrics like latency and throughput.
+    """
     __tablename__ = "system_metrics"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     metric_name = Column(String, nullable=False) # e.g., "retrieval_latency"
@@ -51,6 +85,9 @@ class SystemMetric(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class EvaluationResult(Base):
+    """
+    Persists quality assessment scores (e.g., from RAGAS evaluation).
+    """
     __tablename__ = "evaluation_results"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String, nullable=True)
@@ -62,6 +99,9 @@ class EvaluationResult(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class PromptTrace(Base):
+    """
+    Logs LLM interactions for debugging and prompt versioning.
+    """
     __tablename__ = "prompt_traces"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     prompt_name = Column(String, nullable=False)
@@ -71,6 +111,9 @@ class PromptTrace(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class FeedbackRecord(Base):
+    """
+    Stores human-in-the-loop feedback on system responses.
+    """
     __tablename__ = "feedback_records"
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     session_id = Column(String, nullable=True)

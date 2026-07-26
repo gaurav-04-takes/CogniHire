@@ -1,8 +1,34 @@
+"""
+Simple Hybrid Retriever implementation.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Combines results from a Vector Retriever and a BM25 Retriever by simply
+    interleaving their outputs. 
+
+Data flow:
+    Calls two child retrievers independently, merges their outputs sequentially,
+    deduplicates by chunk ID, and returns the combined list.
+
+Key dependencies:
+    - backend.core.interfaces.retriever
+
+Related modules:
+    - backend.infrastructure.retrievers.rrf_retriever (alternative merger)
+"""
 from typing import List, Dict, Any, Optional
 from backend.core.interfaces.retriever import IRetriever
 from backend.core.domain.chunk import Chunk
 
 class HybridRetriever(IRetriever):
+    """
+    Interleaving hybrid retriever.
+    
+    A simpler alternative to RRF. Takes the top result from Vector, then the top
+    from BM25, then the second from Vector, etc.
+    """
     def __init__(self, vector_retriever: IRetriever, bm25_retriever: IRetriever):
         self.vector_retriever = vector_retriever
         self.bm25_retriever = bm25_retriever
@@ -16,6 +42,15 @@ class HybridRetriever(IRetriever):
     ) -> List[Chunk]:
         """
         Retrieves relevant chunks by combining Vector and BM25 search.
+        
+        Args:
+            query: The search string.
+            collection_name: Target vector collection.
+            filters: Metadata filters passed to both retrievers.
+            top_k: Max total results returned after merging.
+            
+        Returns:
+            A deduplicated, interleaved list of Chunk objects.
         """
         vector_results = self.vector_retriever.retrieve(query, collection_name, filters, top_k)
         bm25_results = self.bm25_retriever.retrieve(query, collection_name, filters, top_k)

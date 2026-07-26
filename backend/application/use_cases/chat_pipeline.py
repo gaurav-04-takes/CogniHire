@@ -1,3 +1,32 @@
+"""
+RAG Chat Pipeline Use Case.
+
+Architectural layer:
+    Application (Use Case)
+
+Purpose:
+    Orchestrates the entire Retrieval-Augmented Generation (RAG) chat workflow.
+    Coordinates query rewriting, caching, retrieval, reranking, context building,
+    and LLM generation into a single cohesive process.
+
+Data flow:
+    User query -> QueryRewriter -> Cache check -> Retriever -> Reranker -> 
+    ContextBuilder -> LLM Provider -> ChatSession persistence.
+
+Key dependencies:
+    - backend.core.interfaces.retriever
+    - backend.core.interfaces.llm_provider
+    - backend.application.services.query_rewriter
+    - backend.application.services.context_builder
+
+Side effects:
+    - Calls external LLM APIs.
+    - Mutates and saves state to ChatSessionRepository.
+    - Updates the Redis cache.
+
+Related modules:
+    - backend.api.chat
+"""
 from typing import Optional, AsyncGenerator, Tuple
 from backend.core.interfaces.retriever import IRetriever
 from backend.core.interfaces.reranker import IReranker
@@ -11,6 +40,9 @@ from backend.core.services.cache_service import cache_service
 import uuid
 
 class ChatPipelineUseCase:
+    """
+    Coordinator for the conversational RAG pipeline.
+    """
     def __init__(
         self,
         retriever: IRetriever,
@@ -32,6 +64,26 @@ class ChatPipelineUseCase:
     async def execute(self, query: str, session_id: Optional[str] = None, collection_name: str = "documents") -> Tuple[str, ChatMessage, ChatSession]:
         """
         Executes the full RAG chat pipeline and returns the full response, the assistant message, and the session.
+        
+        Workflow:
+        1. Resumes or creates a ChatSession.
+        2. Rewrites the query using history for better retrieval context.
+        3. Retrieves chunks (using a 5-minute cache).
+        4. Reranks chunks to improve precision.
+        5. Formats chunks into an LLM context string.
+        6. Generates a response using the LLM.
+        7. Saves the updated session history.
+        
+        Args:
+            query: The user's input message.
+            session_id: Optional UUID to resume a conversation.
+            collection_name: The Chroma collection to search.
+            
+        Returns:
+            A tuple containing:
+                - The raw response string.
+                - The ChatMessage domain object representing the assistant's reply (with citations).
+                - The updated ChatSession domain object.
         """
         if not session_id:
             session_id = str(uuid.uuid4())
@@ -81,6 +133,14 @@ class ChatPipelineUseCase:
         """
         Executes the RAG pipeline but yields the response text token by token.
         (Note: Saving citations requires collecting the full response, so it's simplified here).
+        
+        Args:
+            query: User input message.
+            session_id: Optional UUID.
+            collection_name: Target vector collection.
+            
+        Yields:
+            String fragments of the LLM's response as they stream in.
         """
         if not session_id:
             session_id = str(uuid.uuid4())

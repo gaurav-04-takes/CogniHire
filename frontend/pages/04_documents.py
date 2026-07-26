@@ -1,3 +1,13 @@
+"""
+Streamlit Page: Document Management.
+
+Architectural layer:
+    Frontend (UI Page).
+
+Purpose:
+    Provides a tabular view of all ingested documents, their status, chunk counts,
+    and allows administrators to delete documents from the system.
+"""
 import streamlit as st
 import pandas as pd
 from frontend.services.document_service import DocumentService

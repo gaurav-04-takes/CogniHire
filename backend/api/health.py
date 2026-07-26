@@ -1,3 +1,17 @@
+"""
+FastAPI Health Check Routes.
+
+Architectural layer:
+    API (Controllers).
+
+Purpose:
+    Provides deep health check endpoints to verify the operational status of
+    critical infrastructure dependencies (Database, VectorStore, LLM, Disk, Evaluation).
+
+Key dependencies:
+    - backend.infrastructure.database.session
+    - backend.dependencies.core
+"""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -12,6 +26,9 @@ router = APIRouter(prefix="/health", tags=["health"])
 
 @router.get("/database")
 async def health_database(db: Session = Depends(get_db)):
+    """
+    Checks if the relational database is reachable and can execute queries.
+    """
     try:
         db.execute(text("SELECT 1"))
         return {"status": "ok", "message": "Database is reachable"}
@@ -20,6 +37,9 @@ async def health_database(db: Session = Depends(get_db)):
 
 @router.get("/vectorstore")
 async def health_vectorstore(index_repo: IIndexRepository = Depends(get_index_repository)):
+    """
+    Checks if the vector store (ChromaDB) is reachable and returns basic collection stats.
+    """
     try:
         # ChromaDB health check
         # Depending on the client, we can ping or just catch exceptions
@@ -36,6 +56,9 @@ async def health_vectorstore(index_repo: IIndexRepository = Depends(get_index_re
 
 @router.get("/llm")
 async def health_llm(chat_use_case: ChatPipelineUseCase = Depends(get_chat_pipeline_use_case)):
+    """
+    Pings the configured LLM provider to ensure API keys and network connectivity are valid.
+    """
     try:
         import time
         from backend.config.settings import settings
@@ -61,6 +84,9 @@ async def health_llm(chat_use_case: ChatPipelineUseCase = Depends(get_chat_pipel
 
 @router.get("/disk")
 async def health_disk():
+    """
+    Checks available disk space to warn before database or vector store operations fail.
+    """
     try:
         total, used, free = shutil.disk_usage("/")
         free_gb = free // (2**30)
@@ -74,6 +100,9 @@ async def health_disk():
 
 @router.get("/evaluation")
 async def health_evaluation():
+    """
+    Checks if RAGAS evaluation tools and their required dependencies are available.
+    """
     try:
         eval_service = EvaluationService()
         return {

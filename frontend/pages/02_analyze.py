@@ -1,3 +1,14 @@
+"""
+Streamlit Page: Analysis Dashboard.
+
+Architectural layer:
+    Frontend (UI Page).
+
+Purpose:
+    Allows recruiters to select a processed resume and job description to generate
+    and view detailed comparative AI analyses (match scores, skill gaps).
+    Provides functionality to export the full report as PDF or JSON.
+"""
 import streamlit as st
 from frontend.state.session_manager import SessionManager
 from frontend.services.document_service import DocumentService

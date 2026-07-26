@@ -1,3 +1,13 @@
+"""
+Streamlit Page: Analytics Dashboard.
+
+Architectural layer:
+    Frontend (UI Page).
+
+Purpose:
+    Displays high-level system metrics, quality evaluation scores (RAGAS), and
+    document ingestion statistics using Plotly charts.
+"""
 import streamlit as st
 import plotly.express as px
 import pandas as pd

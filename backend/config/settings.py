@@ -1,8 +1,23 @@
+"""
+Configuration Settings.
+
+Architectural layer:
+    Infrastructure (Configuration).
+
+Purpose:
+    Defines type-safe configuration settings for the application using Pydantic.
+    Handles environment variables and `.env` file loading. Provides different
+    configurations based on the environment (development, testing, production).
+"""
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 import os
 
 class BaseAppSettings(BaseSettings):
+    """
+    Base configuration schema and default values.
+    Pydantic automatically overrides these with matching environment variables.
+    """
     # App Config
     APP_NAME: str = "CogniHire"
     APP_VERSION: str = "1.0.0"
@@ -38,19 +53,26 @@ class BaseAppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow")
 
 class DevelopmentSettings(BaseAppSettings):
+    """Configuration overrides for the development environment."""
     ENVIRONMENT: str = "development"
     LANGCHAIN_TRACING_V2: str = "true"
 
 class TestingSettings(BaseAppSettings):
+    """Configuration overrides for the testing environment (uses in-memory DBs)."""
     ENVIRONMENT: str = "testing"
     DATABASE_URL: str = "sqlite:///:memory:"
     CHROMADB_DIR: str = "./test_chroma_db"
 
 class ProductionSettings(BaseAppSettings):
+    """Configuration overrides for the production environment."""
     ENVIRONMENT: str = "production"
     # Production overrides go here
 
 def get_settings() -> BaseAppSettings:
+    """
+    Factory function that inspects the ENVIRONMENT variable and returns
+    the appropriate settings instance.
+    """
     env = os.getenv("ENVIRONMENT", "development").lower()
     if env == "testing":
         return TestingSettings()
@@ -58,4 +80,5 @@ def get_settings() -> BaseAppSettings:
         return ProductionSettings()
     return DevelopmentSettings()
 
+# Global singleton settings object
 settings = get_settings()

@@ -1,3 +1,13 @@
+"""
+Streamlit Page: Chat Interface.
+
+Architectural layer:
+    Frontend (UI Page).
+
+Purpose:
+    Provides a ChatGPT-like conversational interface for querying ingested documents.
+    Supports streaming responses, citation popovers, and inline feedback rating widgets.
+"""
 import streamlit as st
 from frontend.state.session_manager import SessionManager
 from frontend.services.chat_service import ChatService

@@ -1,3 +1,16 @@
+"""
+Streamlit Application Entrypoint.
+
+Architectural layer:
+    Frontend (Streamlit UI).
+
+Purpose:
+    Initializes the Streamlit application, sets up the page configuration,
+    and renders the main landing page. Serves as the root for all multi-page routing.
+
+Key dependencies:
+    - frontend.state.session_manager
+"""
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

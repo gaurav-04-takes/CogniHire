@@ -1,3 +1,24 @@
+"""
+Interview Question Generation Service.
+
+Architectural layer:
+    Application (Service).
+
+Purpose:
+    Generates targeted technical, behavioral, and project-based interview questions.
+    Questions are tailored to both verify the candidate's claimed experience and
+    probe potential skill gaps identified relative to the job description.
+
+Data flow:
+    Accepts contexts -> Prompts LLM -> Parses into InterviewQuestionResponse.
+
+Key dependencies:
+    - backend.core.interfaces.llm_provider
+    - backend.application.services.analysis.base_analysis_service
+
+Related modules:
+    - backend.application.use_cases.hiring_analysis_pipeline
+"""
 from typing import List
 from pydantic import BaseModel, Field
 from backend.core.interfaces.llm_provider import ILLMProvider
@@ -18,11 +39,25 @@ class InterviewQuestionResponse(BaseModel):
     citations: List[str] = Field(default_factory=list)
 
 class InterviewQuestionService(BaseAnalysisService):
+    """
+    Generates tailored interview questions based on candidate profile and JD gaps.
+    """
     def __init__(self, llm_provider: ILLMProvider, prompt_manager: PromptManager):
         self.llm_provider = llm_provider
         self.prompt_manager = prompt_manager
 
     async def analyze(self, jd_context: str, resume_context: str, citations: List[Citation]) -> InterviewQuestionResponse:
+        """
+        Executes the LLM prompt to generate categorized questions and parses the JSON.
+        
+        Args:
+            jd_context: Full JD text chunks.
+            resume_context: Full resume text chunks.
+            citations: Source citations.
+            
+        Returns:
+            An InterviewQuestionResponse with categorized questions and rationales.
+        """
         system_prompt = self.prompt_manager.get_prompt("interview_questions")
 
         prompt = f"Job Description Context:\n{jd_context}\n\nResume Context:\n{resume_context}"

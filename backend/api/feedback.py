@@ -1,3 +1,15 @@
+"""
+FastAPI Feedback Routes.
+
+Architectural layer:
+    API (Controllers).
+
+Purpose:
+    Exposes endpoints for users to submit qualitative ratings on LLM responses.
+
+Key dependencies:
+    - backend.infrastructure.database.models
+"""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -21,6 +33,9 @@ class FeedbackResponse(BaseModel):
 
 @router.post("", response_model=FeedbackResponse)
 async def submit_feedback(request: FeedbackRequest, db: Session = Depends(get_db)):
+    """
+    Records a user's 1-5 star rating and optional comments for a specific AI response.
+    """
     if request.score < 1 or request.score > 5:
         raise HTTPException(status_code=400, detail="Score must be between 1 and 5")
         
@@ -45,5 +60,8 @@ async def submit_feedback(request: FeedbackRequest, db: Session = Depends(get_db
 
 @router.get("")
 async def get_feedback(db: Session = Depends(get_db), limit: int = 50, skip: int = 0):
+    """
+    Retrieves recent feedback records with pagination.
+    """
     records = db.query(FeedbackRecord).order_by(FeedbackRecord.created_at.desc()).offset(skip).limit(limit).all()
     return [{"id": r.id, "score": r.score, "comment": r.comment, "created_at": r.created_at} for r in records]

@@ -1,11 +1,29 @@
+"""
+Frontend Export Service.
+
+Architectural layer:
+    Frontend (Utility/Service).
+
+Purpose:
+    Provides functionality to generate downloadable PDF reports from structured
+    AI analysis data (match scores, skill gaps, ATS keywords).
+"""
 import json
 from fpdf import FPDF
 import tempfile
 import os
 
 class ExportService:
+    """
+    Utility class for transforming JSON analysis data into formatted PDF documents.
+    """
+    
     @staticmethod
     def generate_pdf_report(data: dict) -> bytes:
+        """
+        Generates a PDF report containing match scores, skill gaps, and ATS analysis.
+        Returns the PDF as raw bytes suitable for Streamlit download buttons.
+        """
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", "B", 16)

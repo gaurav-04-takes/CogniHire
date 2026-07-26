@@ -1,3 +1,20 @@
+"""
+FastAPI Upload Routes.
+
+Architectural layer:
+    API (Controllers).
+
+Purpose:
+    Exposes a legacy or alternative endpoint for uploading documents.
+    Handles basic file validation and queues background ingestion.
+
+Data flow:
+    FastAPI File -> Validation -> Save to DB as PENDING -> Background IngestDocumentUseCase
+
+Key dependencies:
+    - backend.infrastructure.database.models
+    - backend.application.use_cases.ingest_document
+"""
 import traceback
 from fastapi import APIRouter, UploadFile, File, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -18,6 +35,10 @@ def process_document_background(
     file_type: str, 
     use_case: IngestDocumentUseCase
 ):
+    """
+    Background worker function that executes the ingestion pipeline.
+    Must maintain its own DB session since FastAPI closes the request session.
+    """
     # Need a fresh DB session for background task
     from backend.infrastructure.database.session import SessionLocal
     db = SessionLocal()
@@ -69,6 +90,9 @@ async def upload_document(
     db: Session = Depends(get_db),
     use_case: IngestDocumentUseCase = Depends(get_ingest_document_use_case)
 ):
+    """
+    Accepts file uploads, applies size and magic byte validation, and queues background processing.
+    """
     # Validate extension
     ext = file.filename.split('.')[-1].lower() if file.filename else ""
     if ext not in ['pdf', 'docx', 'doc']:
@@ -122,6 +146,9 @@ async def upload_document(
 
 @router.get("/{doc_id}/status")
 async def get_document_status(doc_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieves the processing status of an uploaded document.
+    """
     job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == doc_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Document job not found")

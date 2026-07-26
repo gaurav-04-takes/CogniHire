@@ -1,8 +1,33 @@
+"""
+Reciprocal Rank Fusion (RRF) Retriever implementation.
+
+Architectural layer:
+    Infrastructure.
+
+Purpose:
+    Combines dense and lexical search results mathematically using the RRF
+    algorithm. RRF assigns a score based on the rank of a document in each
+    sub-retriever's result set, mitigating scale differences between distance
+    metrics (e.g., Cosine vs BM25).
+
+Data flow:
+    Over-fetches from child retrievers, calculates RRF scores for all unique
+    documents, and returns the top_k by fused score.
+
+Key dependencies:
+    - backend.core.interfaces.retriever
+
+Related modules:
+    None.
+"""
 from typing import List, Dict, Any, Optional
 from backend.core.interfaces.retriever import IRetriever
 from backend.core.domain.chunk import Chunk
 
 class RRFRetriever(IRetriever):
+    """
+    Advanced hybrid retriever utilizing Reciprocal Rank Fusion.
+    """
     def __init__(self, vector_retriever: IRetriever, bm25_retriever: IRetriever, k: int = 60):
         self.vector_retriever = vector_retriever
         self.bm25_retriever = bm25_retriever
@@ -18,6 +43,16 @@ class RRFRetriever(IRetriever):
         """
         Retrieves chunks using both vector and BM25 retrievers,
         and fuses their rankings using Reciprocal Rank Fusion (RRF).
+        
+        Args:
+            query: The search string.
+            collection_name: The vector collection to query.
+            filters: Metadata filters applied to sub-retrievers.
+            top_k: Number of fused results to return.
+            
+        Returns:
+            A list of Chunks, with the `score` field overwritten by the
+            calculated RRF score.
         """
         # Fetch results from both retrievers (fetching more to fuse effectively)
         fetch_k = max(top_k * 2, 20)

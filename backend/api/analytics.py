@@ -1,3 +1,15 @@
+"""
+FastAPI Analytics Routes.
+
+Architectural layer:
+    API (Controllers).
+
+Purpose:
+    Exposes aggregated system metrics and evaluation results for dashboards.
+
+Key dependencies:
+    - backend.infrastructure.database.models
+"""
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -8,6 +20,9 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 @router.get("/metrics")
 async def get_metrics(db: Session = Depends(get_db)):
+    """
+    Computes and returns high-level system averages (feedback, RAGAS scores, latency).
+    """
     # Calculate average feedback score
     avg_feedback = db.query(func.avg(FeedbackRecord.score)).scalar() or 0.0
     

@@ -1,3 +1,28 @@
+"""
+RAG evaluation service.
+
+Architectural layer:
+    Application services.
+
+Purpose:
+    Integrates with the Ragas library (or a mock implementation) to evaluate
+    the quality of the generated answers based on retrieved contexts.
+
+Data flow:
+    Receives queries, generated answers, and retrieved contexts from the 
+    chat application use case. Stores evaluation results to the database 
+    if a session is provided.
+
+Key dependencies:
+    - EvaluationResult database model.
+    - SQLAlchemy Session.
+
+Side effects:
+    - Writes EvaluationResult records to the database.
+
+Related modules:
+    - backend.infrastructure.database.models
+"""
 from typing import List, Dict, Any, Optional
 from backend.core.services.logging_service import logger
 from backend.infrastructure.database.models import EvaluationResult
@@ -5,11 +30,19 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 
 class EvaluationService:
+    """
+    Service for evaluating the RAG pipeline's response quality.
+    
+    Provides methods to calculate faithfulness, answer relevancy, context 
+    precision, and context recall, optionally persisting them. Evaluation 
+    failure must not break a successful user response.
+    """
     def __init__(self, db_session: Optional[Session] = None):
         self.db_session = db_session
         self._setup_ragas()
 
     def _setup_ragas(self):
+        """Attempt to load the Ragas library, falling back to mock mode if unavailable."""
         try:
             # We would normally import ragas metrics here
             # from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
@@ -22,7 +55,18 @@ class EvaluationService:
     def evaluate_response(self, query: str, answer: str, contexts: List[str], session_id: str = None) -> Dict[str, float]:
         """
         Evaluates a RAG response using Ragas metrics.
-        Returns a dictionary of scores.
+
+        Args:
+            query: The user's input question.
+            answer: The generated response from the LLM.
+            contexts: The retrieved document chunks used as context.
+            session_id: Optional ID of the chat session for database persistence.
+
+        Returns:
+            A dictionary of evaluation scores (e.g., faithfulness, relevancy).
+            
+        Side Effects:
+            Persists an EvaluationResult to the database if self.db_session is set.
         """
         scores = {
             "faithfulness_score": 0.0,
@@ -67,6 +111,13 @@ class EvaluationService:
     def run_quality_gate(self, scores: Dict[str, float], threshold: float = 0.70) -> bool:
         """
         Checks if the evaluation scores pass the minimum quality threshold.
+
+        Args:
+            scores: Dictionary of metric names to float scores.
+            threshold: Minimum required score for all metrics to pass.
+
+        Returns:
+            True if all scores meet or exceed the threshold, False otherwise.
         """
         failed_metrics = []
         for metric, score in scores.items():

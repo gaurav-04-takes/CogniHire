@@ -1,101 +1,56 @@
-# CogniHire
+# CogniHire Documentation
 
-![CogniHire Logo Placeholder](https://via.placeholder.com/800x200?text=CogniHire+-+AI+Hiring+Intelligence)
+> Complete Developer Handbook — Version 1.0
 
-## Project Overview
+This directory contains the complete technical documentation for the CogniHire hiring-intelligence platform. Every document is grounded in the actual source code and verified against the repository.
 
-CogniHire is a state-of-the-art AI-powered hiring intelligence platform designed to streamline the recruitment process. By leveraging a highly decoupled Clean Architecture and advanced Retrieval-Augmented Generation (RAG), CogniHire ingests candidate resumes and job descriptions (JDs), extracting meaningful insights to automate matching, skill gap analysis, and interview preparation.
+## Documentation Index
 
-## Business Problem
+| # | Document | Description |
+|---|----------|-------------|
+| 01 | [Project Overview](01_PROJECT_OVERVIEW.md) | Business problem, system purpose, and high-level architecture |
+| 02 | [Feature Catalogue](02_FEATURE_CATALOGUE.md) | Every implemented feature with status and details |
+| 03 | [Architecture](03_ARCHITECTURE.md) | Clean Architecture layers, dependency rules, and diagrams |
+| 04 | [Codebase Guide](04_CODEBASE_GUIDE.md) | Directory-by-directory and file-by-file navigation |
+| 05 | [Domain Models](05_DOMAIN_MODELS.md) | All entities, value objects, enums, and their relationships |
+| 06 | [Ingestion Pipeline](06_INGESTION_PIPELINE.md) | Upload → Parse → Classify → Chunk → Embed → Index |
+| 07 | [Classification & Parsing](07_CLASSIFICATION_AND_PARSING.md) | Rule-based classification, section detection, metadata |
+| 08 | [Chunking & Embeddings](08_CHUNKING_AND_EMBEDDINGS.md) | Section-aware chunking and Gemini embedding |
+| 09 | [Retrieval Pipeline](09_RETRIEVAL_PIPELINE.md) | Vector, BM25, RRF, and reranking stages |
+| 10 | [RAG & Chat Pipeline](10_RAG_AND_CHAT_PIPELINE.md) | Query rewriting, context building, streaming, citations |
+| 11 | [Hiring Intelligence](11_HIRING_INTELLIGENCE.md) | Match score, skills, ATS, experience, interviews, summaries |
+| 12 | [API Reference](12_API_REFERENCE.md) | Every FastAPI endpoint with schemas and examples |
+| 13 | [Database Reference](13_DATABASE_REFERENCE.md) | SQLAlchemy models, tables, ER diagram |
+| 14 | [Frontend Guide](14_FRONTEND_GUIDE.md) | Streamlit pages, components, services, session state |
+| 15 | [Configuration Reference](15_CONFIGURATION_REFERENCE.md) | All environment variables and settings |
+| 16 | [Prompt Management](16_PROMPT_MANAGEMENT.md) | Prompt catalogue, versioning, and variable substitution |
+| 17 | [Observability & Evaluation](17_OBSERVABILITY_AND_EVALUATION.md) | LangSmith, RAGAS, logging, analytics |
+| 18 | [Security & Error Handling](18_SECURITY_AND_ERROR_HANDLING.md) | Validation, error catalogue, and security controls |
+| 19 | [Local Setup](19_LOCAL_SETUP.md) | Step-by-step installation and first-run guide |
+| 20 | [Testing Guide](20_TESTING_GUIDE.md) | Test structure, commands, coverage, mocking |
+| 21 | [SonarQube Guide](21_SONARQUBE_GUIDE.md) | Local quality analysis workflow |
+| 22 | [Performance Guide](22_PERFORMANCE_GUIDE.md) | Resource usage, model loading, optimization |
+| 23 | [Troubleshooting](23_TROUBLESHOOTING.md) | Common issues with symptoms, causes, and fixes |
+| 24 | [Development Guide](24_DEVELOPMENT_GUIDE.md) | How to safely extend the system |
+| 25 | [Glossary](25_GLOSSARY.md) | RAG, embedding, BM25, and other key terms |
+| 26 | [Known Limitations](26_KNOWN_LIMITATIONS.md) | Honest assessment of current constraints |
 
-Recruiters spend countless hours manually cross-referencing resumes against dense job descriptions. Traditional Applicant Tracking Systems (ATS) rely heavily on exact keyword matching, unfairly filtering out qualified candidates who use different terminology (e.g., "React Engineer" vs "Frontend Developer"). CogniHire solves this by utilizing **semantic understanding**—evaluating candidates based on the actual meaning and context of their experience rather than rigid keyword lists.
+### Diagrams
 
-## Architecture & Features
-
-CogniHire is built using Python, FastAPI, Streamlit, ChromaDB, and Google Gemini API. 
-
-**Core Features:**
-- **Advanced Document Ingestion:** Intelligent section-aware chunking for PDFs and DOCX files.
-- **Hybrid Retrieval (RRF):** Merges Semantic (Vector) search with Lexical (BM25) search for optimal recall, boosted by a Cross-Encoder Reranker.
-- **Hiring Intelligence APIs:** Generates exact Match Scores, Skill Gaps, and tailored Interview Questions based on deep resume-to-JD comparisons.
-- **Conversational Engine:** A citation-backed chat interface allowing recruiters to interact directly with the candidate's parsed context.
-- **Enterprise Observability:** Fully instrumented with structured JSON logging, LangSmith tracing, and Ragas-based quality evaluations.
-
----
-
-## Installation Guide
-
-### Prerequisites
-1. **Python 3.10+**
-2. **Google Gemini API Key**: You must obtain an API key from Google AI Studio.
-3. **BGE Embedding Model**: Ensure you have local embeddings setup or a cloud embedding model configured.
-
-### Local Setup
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/your-username/CogniHire.git
-   cd CogniHire
-   ```
-
-2. **Create a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies:**
-   *(Note: Add your actual `requirements.txt` installation step here)*
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configure Environment Variables:**
-   Create a `.env` file in the root directory:
-   ```env
-   ENVIRONMENT=development
-   APP_NAME="CogniHire API"
-   CORS_ORIGINS="*"
-   MAX_UPLOAD_SIZE_MB=10
-   CACHE_TYPE=memory
-   GEMINI_API_KEY="your_google_gemini_api_key_here"
-   ```
-
-### Step-by-Step: Enabling LangSmith Observability
-
-To gain deep insights, trace LLM latency, and debug prompt chains, you can enable LangSmith.
-
-1. **Sign up for LangSmith:** Go to [smith.langchain.com](https://smith.langchain.com/) and create a free account.
-2. **Generate an API Key:** 
-   - Navigate to **Settings** (gear icon) -> **API Keys**.
-   - Click **Create API Key**.
-   - Copy the generated key.
-3. **Add to `.env`:** Add the following lines to your `.env` file:
-   ```env
-   LANGCHAIN_TRACING_V2=true
-   LANGCHAIN_API_KEY="your_api_key_here"
-   LANGCHAIN_PROJECT="CogniHire_Local"
-   ```
-4. *Restart your backend.* All LLM calls and retrieval traces will now appear in your LangSmith dashboard!
+| Diagram | Description |
+|---------|-------------|
+| [Architecture Diagrams](diagrams/architecture.md) | Clean Architecture and component diagrams |
+| [Ingestion Sequence](diagrams/ingestion-sequence.md) | Document upload and processing flow |
+| [RAG Sequence](diagrams/rag-sequence.md) | Chat and analysis retrieval flow |
+| [Database ER](diagrams/database-er.md) | Entity-relationship diagram |
+| [Multi-Document Isolation](diagrams/multi-document-isolation.md) | Document selection and filtering |
 
 ---
 
-## Example Usage
+## How to Use This Documentation
 
-### Running the Backend (FastAPI)
-```bash
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-Navigate to `http://localhost:8000/docs` to view the interactive Swagger UI.
-
-### Running the Frontend (Streamlit)
-Open a new terminal window:
-```bash
-streamlit run frontend/main.py
-```
-This will launch the web dashboard where you can upload documents, view analytics, and chat with the AI.
-
-## Future Enhancements
-- Kubernetes deployment manifests (Helm charts).
-- Transitioning from SQLite to PostgreSQL for production data persistence.
-- Implementing Celery / Redis for distributed asynchronous document ingestion.
+- **New developers**: Start with [Project Overview](01_PROJECT_OVERVIEW.md) → [Architecture](03_ARCHITECTURE.md) → [Local Setup](19_LOCAL_SETUP.md)
+- **Code reviewers**: Use [Codebase Guide](04_CODEBASE_GUIDE.md) and [Architecture](03_ARCHITECTURE.md)
+- **Debugging**: Go to [Troubleshooting](23_TROUBLESHOOTING.md) or [Security & Error Handling](18_SECURITY_AND_ERROR_HANDLING.md)
+- **Extending the system**: Read [Development Guide](24_DEVELOPMENT_GUIDE.md) and [Architecture](03_ARCHITECTURE.md)
+- **Interview preparation**: Review [Project Overview](01_PROJECT_OVERVIEW.md), [Feature Catalogue](02_FEATURE_CATALOGUE.md), and [Architecture](03_ARCHITECTURE.md)
