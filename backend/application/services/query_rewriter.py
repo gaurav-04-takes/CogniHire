@@ -23,7 +23,8 @@ Side effects:
 Related modules:
     - backend.application.use_cases.chat_pipeline
 """
-from typing import List
+from typing import List, Tuple
+import json
 from langchain_core.messages import HumanMessage, SystemMessage
 from backend.core.interfaces.llm_provider import ILLMProvider
 from backend.core.domain.chat import ChatMessage
@@ -31,33 +32,43 @@ from backend.core.services.prompt_manager import PromptManager
 
 class QueryRewriter:
     """
-    Service responsible for contextualizing user queries.
+    Service responsible for contextualizing user queries and detecting intent.
     """
     def __init__(self, llm_provider: ILLMProvider, prompt_manager: PromptManager):
         self.llm_provider = llm_provider
         self.prompt_manager = prompt_manager
 
-    async def rewrite(self, query: str, history: List[ChatMessage]) -> str:
+    async def rewrite(self, query: str, history: List[ChatMessage]) -> Tuple[str, str]:
         """
-        Rewrites the query using chat history to make it standalone.
-        If no history exists, returns the query as is.
+        Rewrites the query using chat history to make it standalone and detects intent.
         
         Args:
             query: The latest user input string.
             history: The list of prior ChatMessage objects in the session.
             
         Returns:
-            A string optimized for vector search, with pronouns resolved.
+            A tuple (intent, rewritten_query).
         """
-        if not history:
-            return query
-
         system_prompt = self.prompt_manager.get_prompt("query_rewriter")
-
-        history_text = "\n".join([f"{msg.role}: {msg.content}" for msg in history[-5:]]) # Use last 5 messages
         
-        prompt = f"Conversation History:\n{history_text}\n\nFollow-up question: {query}\n\nRewritten query:"
+        history_text = ""
+        if history:
+            history_text = "\n".join([f"{msg.role}: {msg.content}" for msg in history[-5:]]) # Use last 5 messages
+            
+        prompt = f"Conversation History:\n{history_text}\n\nFollow-up question: {query}\n\n"
         
-        rewritten_query = await self.llm_provider.generate(prompt=prompt, system_prompt=system_prompt)
+        response = await self.llm_provider.generate(prompt=prompt, system_prompt=system_prompt)
         
-        return rewritten_query.strip()
+        try:
+            # Try to parse as JSON. Sometimes LLMs return markdown code blocks.
+            import re
+            json_str = response
+            match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
+            if match:
+                json_str = match.group(1)
+            parsed = json.loads(json_str)
+            intent = parsed.get("intent", "comparison_explanation")
+            rewritten_query = parsed.get("rewritten_query", query)
+            return intent, rewritten_query
+        except Exception:
+            return "comparison_explanation", query

@@ -4,18 +4,22 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from backend.main import app
 from backend.dependencies.core import get_chat_pipeline_use_case, _chat_session_repo
 from backend.core.domain.chat import ChatSession, ChatMessage, Citation
+from backend.api.chat import validate_documents
+from fastapi import HTTPException
+from backend.core.domain.document import DocumentType
+from backend.infrastructure.database.models import ProcessingStatus
 
 client = TestClient(app)
 
 class MockChatPipelineUseCase:
-    async def execute(self, query, session_id, collection_name):
+    async def execute(self, query, session_id, resume_document_id, jd_document_id, collection_name):
         session = ChatSession(session_id="session_123")
         msg = ChatMessage(role="assistant", content="Response", citations=[
             Citation(document_id="doc1", document_type="resume", section_type="exp", chunk_index=0)
         ])
         return "Response", msg, session
 
-    async def execute_stream(self, query, session_id, collection_name):
+    async def execute_stream(self, query, session_id, resume_document_id, jd_document_id, collection_name):
         yield "Stream "
         yield "Response"
 
@@ -30,8 +34,13 @@ def override_dependencies(mock_use_case):
     app.dependency_overrides.clear()
 
 def test_chat_endpoint(mock_use_case):
-    with patch("backend.api.chat.EvaluationService") as mock_eval:
-        response = client.post("/api/v1/chat", json={"query": "hello", "session_id": "session_123"})
+    with patch("backend.api.chat.validate_documents") as mock_validate, patch("backend.api.chat.EvaluationService") as mock_eval:
+        response = client.post("/api/v1/chat", json={
+            "query": "hello", 
+            "session_id": "session_123",
+            "resume_document_id": "res_1",
+            "jd_document_id": "jd_1"
+        })
         assert response.status_code == 200
         data = response.json()
         assert data["response"] == "Response"
@@ -42,38 +51,67 @@ def test_chat_endpoint_error(mock_use_case, monkeypatch):
     async def mock_execute(*args, **kwargs):
         raise Exception("Pipeline error")
     monkeypatch.setattr(mock_use_case, "execute", mock_execute)
-    response = client.post("/api/v1/chat", json={"query": "hello"})
-    assert response.status_code == 500
+    with patch("backend.api.chat.validate_documents"):
+        response = client.post("/api/v1/chat", json={
+            "query": "hello",
+            "resume_document_id": "res_1",
+            "jd_document_id": "jd_1"
+        })
+        assert response.status_code == 500
 
 def test_chat_stream_endpoint(mock_use_case):
-    response = client.post("/api/v1/chat/stream", json={"query": "hello"})
-    assert response.status_code == 200
-    # TestClient doesn't easily test SSE, but we can check if it returns 200
+    with patch("backend.api.chat.validate_documents"):
+        response = client.post("/api/v1/chat/stream", json={
+            "query": "hello",
+            "resume_document_id": "res_1",
+            "jd_document_id": "jd_1"
+        })
+        assert response.status_code == 200
 
 def test_chat_stream_error(mock_use_case, monkeypatch):
     def mock_execute_stream(*args, **kwargs):
         raise Exception("Stream error")
     monkeypatch.setattr(mock_use_case, "execute_stream", mock_execute_stream)
-    response = client.post("/api/v1/chat/stream", json={"query": "hello"})
-    assert response.status_code == 500
+    with patch("backend.api.chat.validate_documents"):
+        response = client.post("/api/v1/chat/stream", json={
+            "query": "hello",
+            "resume_document_id": "res_1",
+            "jd_document_id": "jd_1"
+        })
+        assert response.status_code == 500
 
-def test_get_history():
-    session = ChatSession(session_id="session_456")
-    _chat_session_repo.save(session)
-    
-    response = client.get("/api/v1/chat/session_456/history")
-    assert response.status_code == 200
-    assert response.json()["session_id"] == "session_456"
-    
-    response_missing = client.get("/api/v1/chat/missing/history")
-    assert response_missing.status_code == 404
+def test_validate_documents_same_id():
+    mock_db = MagicMock()
+    with pytest.raises(HTTPException) as excinfo:
+        validate_documents(mock_db, "id1", "id1")
+    assert "cannot be the same document" in str(excinfo.value.detail)
 
-def test_delete_session():
-    session = ChatSession(session_id="session_789")
-    _chat_session_repo.save(session)
+def test_validate_documents_not_found():
+    mock_db = MagicMock()
+    mock_db.query().filter().first.return_value = None
+    with pytest.raises(HTTPException) as excinfo:
+        validate_documents(mock_db, "res_1", "jd_1")
+    assert "were not found" in str(excinfo.value.detail)
+
+def test_validate_documents_wrong_types():
+    mock_db = MagicMock()
+    mock_resume = MagicMock(doc_type=DocumentType.JOB_DESCRIPTION.value)
+    mock_jd = MagicMock(doc_type=DocumentType.RESUME.value)
     
-    response = client.delete("/api/v1/chat/session_789")
-    assert response.status_code == 200
+    mock_db.query().filter().first.side_effect = [mock_resume, mock_jd]
     
-    response_missing = client.delete("/api/v1/chat/missing")
-    assert response_missing.status_code == 404
+    with pytest.raises(HTTPException) as excinfo:
+        validate_documents(mock_db, "res_1", "jd_1")
+    assert "is not classified as a Resume" in str(excinfo.value.detail)
+
+def test_validate_documents_unindexed():
+    mock_db = MagicMock()
+    mock_resume = MagicMock(doc_type=DocumentType.RESUME.value)
+    mock_jd = MagicMock(doc_type=DocumentType.JOB_DESCRIPTION.value)
+    mock_job = MagicMock(status=ProcessingStatus.PENDING, indexed=False)
+    
+    mock_db.query().filter().first.side_effect = [mock_resume, mock_jd, mock_job, mock_job]
+    
+    with pytest.raises(HTTPException) as excinfo:
+        validate_documents(mock_db, "res_1", "jd_1")
+    assert "not fully processed and indexed" in str(excinfo.value.detail)

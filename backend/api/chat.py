@@ -19,12 +19,18 @@ from backend.dependencies.core import get_chat_pipeline_use_case, _chat_session_
 from backend.application.use_cases.chat_pipeline import ChatPipelineUseCase
 from backend.core.services.evaluation_service import EvaluationService
 from fastapi import BackgroundTasks
+from sqlalchemy.orm import Session
+from backend.infrastructure.database.session import get_db
+from backend.infrastructure.database.models import DocumentModel, DocumentProcessingJobModel, ProcessingStatus
+from backend.core.domain.document import DocumentType
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 class ChatRequest(BaseModel):
     query: str
     session_id: Optional[str] = None
+    resume_document_id: str
+    jd_document_id: str
     collection_name: str = "documents"
 
 class ChatResponse(BaseModel):
@@ -32,10 +38,36 @@ class ChatResponse(BaseModel):
     session_id: str
     citations: list
 
+def validate_documents(db: Session, resume_id: str, jd_id: str):
+    if resume_id == jd_id:
+        raise HTTPException(status_code=400, detail="Resume and Job Description cannot be the same document.")
+        
+    resume_doc = db.query(DocumentModel).filter(DocumentModel.id == resume_id).first()
+    jd_doc = db.query(DocumentModel).filter(DocumentModel.id == jd_id).first()
+    
+    if not resume_doc or not jd_doc:
+        raise HTTPException(status_code=400, detail="One or both selected documents were not found.")
+        
+    if resume_doc.doc_type != DocumentType.RESUME.value:
+        raise HTTPException(status_code=400, detail=f"Document {resume_id} is not classified as a Resume.")
+        
+    if jd_doc.doc_type != DocumentType.JOB_DESCRIPTION.value:
+        raise HTTPException(status_code=400, detail=f"Document {jd_id} is not classified as a Job Description.")
+        
+    resume_job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == resume_id).first()
+    jd_job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == jd_id).first()
+    
+    if not resume_job or resume_job.status != ProcessingStatus.COMPLETED or not resume_job.indexed:
+        raise HTTPException(status_code=400, detail=f"Resume {resume_id} is not fully processed and indexed.")
+        
+    if not jd_job or jd_job.status != ProcessingStatus.COMPLETED or not jd_job.indexed:
+        raise HTTPException(status_code=400, detail=f"Job Description {jd_id} is not fully processed and indexed.")
+
 @router.post("")
 async def chat(
     request: ChatRequest,
     background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
     use_case: ChatPipelineUseCase = Depends(get_chat_pipeline_use_case)
 ):
     """
@@ -43,12 +75,15 @@ async def chat(
     Triggers RAGAS background evaluation asynchronously.
     """
     try:
+        validate_documents(db, request.resume_document_id, request.jd_document_id)
+        
         response_text, assistant_msg, session = await use_case.execute(
             query=request.query,
             session_id=request.session_id,
+            resume_document_id=request.resume_document_id,
+            jd_document_id=request.jd_document_id,
             collection_name=request.collection_name
         )
-        
         # Trigger background evaluation
         eval_service = EvaluationService() # In real app, inject db_session
         contexts = [c.format() for c in assistant_msg.citations] if assistant_msg.citations else []
@@ -73,15 +108,20 @@ from fastapi.responses import StreamingResponse
 @router.post("/stream")
 async def chat_stream(
     request: ChatRequest,
+    db: Session = Depends(get_db),
     use_case: ChatPipelineUseCase = Depends(get_chat_pipeline_use_case)
 ):
     """
     Streaming chat endpoint. Yields SSE events as the LLM generates tokens.
     """
     try:
+        validate_documents(db, request.resume_document_id, request.jd_document_id)
+        
         generator = use_case.execute_stream(
             query=request.query,
             session_id=request.session_id,
+            resume_document_id=request.resume_document_id,
+            jd_document_id=request.jd_document_id,
             collection_name=request.collection_name
         )
         return StreamingResponse(generator, media_type="text/event-stream")

@@ -61,7 +61,7 @@ class ChatPipelineUseCase:
         self.context_builder = context_builder
         self.prompt_manager = prompt_manager
 
-    async def execute(self, query: str, session_id: Optional[str] = None, collection_name: str = "documents") -> Tuple[str, ChatMessage, ChatSession]:
+    async def execute(self, query: str, session_id: Optional[str] = None, resume_document_id: Optional[str] = None, jd_document_id: Optional[str] = None, collection_name: str = "documents") -> Tuple[str, ChatMessage, ChatSession]:
         """
         Executes the full RAG chat pipeline and returns the full response, the assistant message, and the session.
         
@@ -87,16 +87,23 @@ class ChatPipelineUseCase:
         """
         if not session_id:
             session_id = str(uuid.uuid4())
-            session = ChatSession(session_id=session_id)
+            session = ChatSession(session_id=session_id, resume_document_id=resume_document_id, jd_document_id=jd_document_id)
             self.session_repository.save(session)
         else:
             session = self.session_repository.get(session_id)
             if not session:
-                session = ChatSession(session_id=session_id)
+                session = ChatSession(session_id=session_id, resume_document_id=resume_document_id, jd_document_id=jd_document_id)
+                self.session_repository.save(session)
+            elif session.resume_document_id != resume_document_id or session.jd_document_id != jd_document_id:
+                # Context changed, reset history
+                session.history = []
+                session.rewritten_queries = []
+                session.resume_document_id = resume_document_id
+                session.jd_document_id = jd_document_id
                 self.session_repository.save(session)
                 
         # 1. Rewrite Query
-        rewritten_query = await self.query_rewriter.rewrite(query, session.history)
+        intent, rewritten_query = await self.query_rewriter.rewrite(query, session.history)
         session.rewritten_queries.append(rewritten_query)
         
         # Add user message to history
@@ -104,11 +111,20 @@ class ChatPipelineUseCase:
         session.history.append(user_msg)
         
         # 2. Retrieve (with cache)
-        cache_key = f"retrieve_{rewritten_query}_{collection_name}"
+        cache_key = f"retrieve_{rewritten_query}_{collection_name}_{resume_document_id}_{jd_document_id}"
         retrieved_chunks = cache_service.get(cache_key)
         
+        filters = None
+        if resume_document_id and jd_document_id:
+            filters = {
+                "$or": [
+                    {"document_id": resume_document_id},
+                    {"document_id": jd_document_id}
+                ]
+            }
+        
         if not retrieved_chunks:
-            retrieved_chunks = self.retriever.retrieve(rewritten_query, collection_name=collection_name, top_k=20)
+            retrieved_chunks = self.retriever.retrieve(rewritten_query, collection_name=collection_name, filters=filters, top_k=20)
             cache_service.set(cache_key, retrieved_chunks, ttl_seconds=300) # Cache for 5 mins
         
         # 3. Rerank
@@ -118,9 +134,38 @@ class ChatPipelineUseCase:
         context_str, citations = self.context_builder.build_context(reranked_chunks)
         
         # 5. Generate Response
-        system_prompt = self.prompt_manager.get_prompt("chat_generation", context_str=context_str)
+        if intent == "resume_improvement":
+            system_prompt = self.prompt_manager.get_prompt("resume_improvement", context_str=context_str)
+        else:
+            system_prompt = self.prompt_manager.get_prompt("chat_generation", context_str=context_str)
         
         response_text = await self.llm_provider.generate(prompt=query, system_prompt=system_prompt)
+        
+        if intent == "resume_improvement":
+            import json, re
+            try:
+                json_str = response_text
+                match = re.search(r'```json\n(.*?)\n```', response_text, re.DOTALL)
+                if match:
+                    json_str = match.group(1)
+                parsed = json.loads(json_str)
+                # Convert structured JSON to Markdown
+                md_response = f"### Resume-JD Alignment Summary\n{parsed.get('alignment_summary', '')}\n\n"
+                
+                high_priority = parsed.get('high_priority_changes', [])
+                if high_priority:
+                    md_response += "### High-Priority Changes\n"
+                    for change in high_priority:
+                        md_response += f"- **{change.get('section', 'General')} ({change.get('priority', 'Medium')} Priority)**:\n"
+                        md_response += f"  - **JD Requirement**: {change.get('jd_requirement', '')}\n"
+                        md_response += f"  - **Current Resume**: {change.get('current_resume_evidence', '')}\n"
+                        md_response += f"  - **Recommendation**: {change.get('recommendation', '')}\n"
+                        md_response += f"  - *Rationale*: {change.get('rationale', '')}\n"
+                        
+                md_response += f"\n\n*Disclaimer: {parsed.get('disclaimer', '')}*"
+                response_text = md_response
+            except Exception as e:
+                response_text = "I encountered an error formatting the improvement recommendations. Here is the raw output:\n\n" + response_text
         
         # 6. Attach Citations and Save Session
         assistant_msg = ChatMessage(role="assistant", content=response_text, citations=citations)
@@ -129,7 +174,7 @@ class ChatPipelineUseCase:
         
         return response_text, assistant_msg, session
 
-    async def execute_stream(self, query: str, session_id: Optional[str] = None, collection_name: str = "documents") -> AsyncGenerator[str, None]:
+    async def execute_stream(self, query: str, session_id: Optional[str] = None, resume_document_id: Optional[str] = None, jd_document_id: Optional[str] = None, collection_name: str = "documents") -> AsyncGenerator[str, None]:
         """
         Executes the RAG pipeline but yields the response text token by token.
         (Note: Saving citations requires collecting the full response, so it's simplified here).
@@ -144,26 +189,44 @@ class ChatPipelineUseCase:
         """
         if not session_id:
             session_id = str(uuid.uuid4())
-            session = ChatSession(session_id=session_id)
+            session = ChatSession(session_id=session_id, resume_document_id=resume_document_id, jd_document_id=jd_document_id)
             self.session_repository.save(session)
         else:
             session = self.session_repository.get(session_id)
             if not session:
-                session = ChatSession(session_id=session_id)
+                session = ChatSession(session_id=session_id, resume_document_id=resume_document_id, jd_document_id=jd_document_id)
+                self.session_repository.save(session)
+            elif session.resume_document_id != resume_document_id or session.jd_document_id != jd_document_id:
+                session.history = []
+                session.rewritten_queries = []
+                session.resume_document_id = resume_document_id
+                session.jd_document_id = jd_document_id
                 self.session_repository.save(session)
                 
-        rewritten_query = await self.query_rewriter.rewrite(query, session.history)
+        intent, rewritten_query = await self.query_rewriter.rewrite(query, session.history)
         session.rewritten_queries.append(rewritten_query)
         
         user_msg = ChatMessage(role="user", content=query)
         session.history.append(user_msg)
         
-        retrieved_chunks = self.retriever.retrieve(rewritten_query, collection_name=collection_name, top_k=20)
+        filters = None
+        if resume_document_id and jd_document_id:
+            filters = {
+                "$or": [
+                    {"document_id": resume_document_id},
+                    {"document_id": jd_document_id}
+                ]
+            }
+            
+        retrieved_chunks = self.retriever.retrieve(rewritten_query, collection_name=collection_name, filters=filters, top_k=20)
         reranked_chunks = self.reranker.rerank(rewritten_query, retrieved_chunks, top_k=5)
         
         context_str, citations = self.context_builder.build_context(reranked_chunks)
         
-        system_prompt = self.prompt_manager.get_prompt("chat_generation", context_str=context_str)
+        if intent == "resume_improvement":
+            system_prompt = self.prompt_manager.get_prompt("resume_improvement", context_str=context_str)
+        else:
+            system_prompt = self.prompt_manager.get_prompt("chat_generation", context_str=context_str)
         
         full_response = ""
         async for chunk in self.llm_provider.stream(prompt=query, system_prompt=system_prompt):

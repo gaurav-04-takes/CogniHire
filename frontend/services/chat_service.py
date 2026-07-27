@@ -17,19 +17,19 @@ class ChatService:
     """
     
     @staticmethod
-    def chat(query: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    def chat(query: str, session_id: Optional[str] = None, resume_document_id: Optional[str] = None, jd_document_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Sends a synchronous chat query and waits for the full response and citations.
         """
-        payload = {"query": query, "session_id": session_id}
+        payload = {"query": query, "session_id": session_id, "resume_document_id": resume_document_id, "jd_document_id": jd_document_id}
         return api_client.post("/chat", json=payload)
 
     @staticmethod
-    def chat_stream(query: str, session_id: Optional[str] = None):
+    def chat_stream(query: str, session_id: Optional[str] = None, resume_document_id: Optional[str] = None, jd_document_id: Optional[str] = None):
         """
         Sends a chat query and returns an iterable stream of Server-Sent Events (SSE).
         """
-        payload = {"query": query, "session_id": session_id}
+        payload = {"query": query, "session_id": session_id, "resume_document_id": resume_document_id, "jd_document_id": jd_document_id}
         return api_client.stream_post("/chat/stream", json=payload)
 
     @staticmethod

@@ -22,6 +22,8 @@ class ChatMessage(BaseModel):
 
 class ChatSession(BaseModel):
     session_id: str
+    resume_document_id: Optional[str] = None
+    jd_document_id: Optional[str] = None
     history: List[ChatMessage] = Field(default_factory=list)
     rewritten_queries: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
