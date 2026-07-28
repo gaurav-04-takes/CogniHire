@@ -5,7 +5,7 @@ from backend.main import app
 from backend.dependencies.core import get_chat_pipeline_use_case, _chat_session_repo
 from backend.core.domain.chat import ChatSession, ChatMessage, Citation
 from backend.api.chat import validate_documents
-from fastapi import HTTPException
+from backend.core.domain.exceptions import ValidationError, DocumentNotFoundError, DocumentProcessingError
 from backend.core.domain.document import DocumentType
 from backend.infrastructure.database.models import ProcessingStatus
 
@@ -82,16 +82,16 @@ def test_chat_stream_error(mock_use_case, monkeypatch):
 
 def test_validate_documents_same_id():
     mock_db = MagicMock()
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError) as excinfo:
         validate_documents(mock_db, "id1", "id1")
-    assert "cannot be the same document" in str(excinfo.value.detail)
+    assert "cannot be the same document" in str(excinfo.value.message)
 
 def test_validate_documents_not_found():
     mock_db = MagicMock()
     mock_db.query().filter().first.return_value = None
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(DocumentNotFoundError) as excinfo:
         validate_documents(mock_db, "res_1", "jd_1")
-    assert "were not found" in str(excinfo.value.detail)
+    assert "were not found" in str(excinfo.value.message)
 
 def test_validate_documents_wrong_types():
     mock_db = MagicMock()
@@ -100,9 +100,9 @@ def test_validate_documents_wrong_types():
     
     mock_db.query().filter().first.side_effect = [mock_resume, mock_jd]
     
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError) as excinfo:
         validate_documents(mock_db, "res_1", "jd_1")
-    assert "is not classified as a Resume" in str(excinfo.value.detail)
+    assert "is not classified as a Resume" in str(excinfo.value.message)
 
 def test_validate_documents_unindexed():
     mock_db = MagicMock()
@@ -112,6 +112,6 @@ def test_validate_documents_unindexed():
     
     mock_db.query().filter().first.side_effect = [mock_resume, mock_jd, mock_job, mock_job]
     
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(DocumentProcessingError) as excinfo:
         validate_documents(mock_db, "res_1", "jd_1")
-    assert "not fully processed and indexed" in str(excinfo.value.detail)
+    assert "not fully processed and indexed" in str(excinfo.value.message)

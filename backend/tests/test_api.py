@@ -3,13 +3,15 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 from backend.main import app
 from backend.infrastructure.database.session import SessionLocal
-from backend.infrastructure.database.models import FeedbackRecord
+from backend.infrastructure.database.models import FeedbackRecord, Base
+from backend.infrastructure.database.session import SessionLocal, engine
 from backend.dependencies.core import get_index_repository, get_chat_pipeline_use_case
 
 client = TestClient(app)
 
 @pytest.fixture
 def db_session():
+    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
         # cleanup feedback table

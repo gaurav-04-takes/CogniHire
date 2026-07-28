@@ -24,6 +24,7 @@ import uuid
 from backend.infrastructure.database.session import get_db
 from backend.infrastructure.database.models import DocumentModel, DocumentProcessingJobModel, ProcessingStatus
 from backend.dependencies.core import get_ingest_document_use_case, get_index_repository
+from backend.core.domain.exceptions import ValidationError, DocumentNotFoundError
 from backend.application.use_cases.ingest_document import IngestDocumentUseCase
 from backend.core.domain.document import Document, DocumentType
 from backend.core.interfaces.index_repository import IIndexRepository
@@ -122,7 +123,7 @@ async def upload_document(
     """
     ext = file.filename.split('.')[-1].lower() if file.filename else ""
     if ext not in ['pdf', 'docx', 'doc']:
-        raise HTTPException(status_code=400, detail="Only PDF and DOCX files are supported.")
+        raise ValidationError("Only PDF and DOCX files are supported.")
         
     content = await file.read()
     doc_id = str(uuid.uuid4())
@@ -199,7 +200,7 @@ async def get_document(doc_id: str, db: Session = Depends(get_db)):
     """
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise DocumentNotFoundError("Document not found")
         
     job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == doc.id).first()
     return {
@@ -221,7 +222,7 @@ async def get_document_status(doc_id: str, db: Session = Depends(get_db)):
     """
     job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == doc_id).first()
     if not job:
-        raise HTTPException(status_code=404, detail="Document job not found")
+        raise DocumentNotFoundError("Document job not found")
         
     return {
         "document_id": job.document_id,
@@ -242,7 +243,7 @@ async def delete_document(
     """
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise DocumentNotFoundError("Document not found")
         
     job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == doc.id).first()
     
@@ -276,16 +277,16 @@ async def reclassify_document(
     """
     doc = db.query(DocumentModel).filter(DocumentModel.id == doc_id).first()
     if not doc:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise DocumentNotFoundError("Document not found")
         
     job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == doc.id).first()
     if not job:
-        raise HTTPException(status_code=404, detail="Document job not found")
+        raise DocumentNotFoundError("Document job not found")
         
     try:
         doc_type_override = DocumentType(request.document_type)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid document_type")
+        raise ValidationError("Invalid document_type")
         
     # Delete existing vectors from ChromaDB to prevent duplication
     # We delete from all collections since we might have indexed it as the wrong type before

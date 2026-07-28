@@ -29,6 +29,37 @@ app = FastAPI(
     version=settings.APP_VERSION,
 )
 
+from fastapi.responses import JSONResponse
+from fastapi import Request
+from backend.core.domain.exceptions import (
+    ApplicationError, ValidationError, DocumentNotFoundError,
+    DocumentProcessingError, RetrievalError, LLMProviderError
+)
+import logging
+
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(ApplicationError)
+async def application_error_handler(request: Request, exc: ApplicationError):
+    logger.error(f"Application error: {exc.message}")
+    status_code = 400
+    if isinstance(exc, DocumentNotFoundError):
+        status_code = 404
+    elif isinstance(exc, (DocumentProcessingError, RetrievalError, LLMProviderError)):
+        status_code = 500
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": exc.message},
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,

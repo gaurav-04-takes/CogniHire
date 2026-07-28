@@ -15,8 +15,8 @@ from backend.application.use_cases.chat_pipeline import ChatPipelineUseCase
 
 class MockLLMProvider(ILLMProvider):
     async def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
-        if "Rewritten query:" in prompt:
-            return "rewritten query"
+        if "Follow-up question:" in prompt:
+            return '{"intent": "comparison_explanation", "rewritten_query": "rewritten query"}'
         return "mocked answer"
 
     async def stream(self, prompt: str, system_prompt: Optional[str] = None) -> AsyncGenerator[str, None]:
@@ -68,8 +68,8 @@ async def test_query_rewriter():
     rewriter = QueryRewriter(MockLLMProvider(), MockPromptManager())
     history = [ChatMessage(role="user", content="hi"), ChatMessage(role="assistant", content="hello")]
     
-    rewritten = await rewriter.rewrite("tell me more", history)
-    assert rewritten == "rewritten query"
+    rewritten_tuple = await rewriter.rewrite("tell me more", history)
+    assert rewritten_tuple[1] == "rewritten query"
 
 class MockReranker(IReranker):
     def rerank(self, query: str, chunks: List[Chunk], top_k: int = 5) -> List[Chunk]:
@@ -96,4 +96,4 @@ async def test_chat_pipeline():
     
     assert response_text == "mocked answer"
     assert len(session.history) == 2 # 1 user, 1 assistant
-    assert session.rewritten_queries[0] == "query"
+    assert session.rewritten_queries[0] == "rewritten query"

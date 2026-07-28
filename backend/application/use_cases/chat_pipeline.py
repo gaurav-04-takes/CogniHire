@@ -103,7 +103,12 @@ class ChatPipelineUseCase:
                 self.session_repository.save(session)
                 
         # 1. Rewrite Query
-        intent, rewritten_query = await self.query_rewriter.rewrite(query, session.history)
+        try:
+            intent, rewritten_query = await self.query_rewriter.rewrite(query, session.history)
+        except Exception as e:
+            from backend.core.domain.exceptions import LLMProviderError
+            raise LLMProviderError(f"Failed to rewrite query: {str(e)}")
+            
         session.rewritten_queries.append(rewritten_query)
         
         # Add user message to history
@@ -139,7 +144,13 @@ class ChatPipelineUseCase:
         else:
             system_prompt = self.prompt_manager.get_prompt("chat_generation", context_str=context_str)
         
-        response_text = await self.llm_provider.generate(prompt=query, system_prompt=system_prompt)
+        try:
+            response_text = await self.llm_provider.generate(prompt=query, system_prompt=system_prompt)
+        except Exception as e:
+            from backend.core.domain.exceptions import LLMProviderError
+            if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                raise LLMProviderError("The AI service is currently rate-limited. Please wait a few seconds and try again.")
+            raise LLMProviderError(f"Failed to generate response: {str(e)}")
         
         if intent == "resume_improvement":
             import json, re
@@ -203,7 +214,15 @@ class ChatPipelineUseCase:
                 session.jd_document_id = jd_document_id
                 self.session_repository.save(session)
                 
-        intent, rewritten_query = await self.query_rewriter.rewrite(query, session.history)
+        try:
+            intent, rewritten_query = await self.query_rewriter.rewrite(query, session.history)
+        except Exception as e:
+            if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                yield "I'm sorry, the AI service is currently rate-limited. Please wait a few seconds and try again."
+            else:
+                yield f"An error occurred while processing your request: {str(e)}"
+            return
+            
         session.rewritten_queries.append(rewritten_query)
         
         user_msg = ChatMessage(role="user", content=query)
@@ -229,9 +248,18 @@ class ChatPipelineUseCase:
             system_prompt = self.prompt_manager.get_prompt("chat_generation", context_str=context_str)
         
         full_response = ""
-        async for chunk in self.llm_provider.stream(prompt=query, system_prompt=system_prompt):
-            full_response += chunk
-            yield chunk
+        try:
+            async for chunk in self.llm_provider.stream(prompt=query, system_prompt=system_prompt):
+                full_response += chunk
+                yield chunk
+        except Exception as e:
+            error_msg = ""
+            if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                error_msg = "\n\n[Error: The AI service is currently rate-limited. Please wait a few seconds and try again.]"
+            else:
+                error_msg = f"\n\n[An error occurred during generation: {str(e)}]"
+            full_response += error_msg
+            yield error_msg
             
         assistant_msg = ChatMessage(role="assistant", content=full_response, citations=citations)
         session.history.append(assistant_msg)

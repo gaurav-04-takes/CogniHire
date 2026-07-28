@@ -117,7 +117,7 @@ def test_analyze_validation_errors(db_session):
     
     # Invalid resume ID
     response = client.post("/api/v1/analyze/match", json={"resume_id": "invalid", "jd_id": j_id})
-    assert response.status_code == 400
+    assert response.status_code == 404
     
     # JD as Resume
     response = client.post("/api/v1/analyze/match", json={"resume_id": j_id, "jd_id": j_id})

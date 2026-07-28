@@ -36,7 +36,7 @@ def setup_docs(db_session, r_status, r_type, j_status, j_type, r_indexed=True, j
 
 def test_rejection_missing_resume(db_session):
     response = client.post("/api/v1/analyze/match", json={"resume_id": "nonexistent", "jd_id": "nonexistent"})
-    assert response.status_code == 400
+    assert response.status_code == 404
     assert "Resume not found" in response.json()["detail"]
 
 def test_rejection_resume_points_to_jd(db_session):
@@ -54,5 +54,5 @@ def test_rejection_jd_points_to_resume(db_session):
 def test_rejection_unindexed_docs(db_session):
     r_id, j_id = setup_docs(db_session, ProcessingStatus.COMPLETED, "resume", ProcessingStatus.COMPLETED, "job_description", r_indexed=False)
     response = client.post("/api/v1/analyze/match", json={"resume_id": r_id, "jd_id": j_id})
-    assert response.status_code == 400
+    assert response.status_code == 500
     assert "Resume is not fully processed and indexed" in response.json()["detail"]

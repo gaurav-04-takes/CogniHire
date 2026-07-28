@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from backend.infrastructure.database.session import get_db
 from backend.infrastructure.database.models import DocumentModel, DocumentProcessingJobModel, ProcessingStatus
 from backend.core.domain.document import DocumentType
+from backend.core.domain.exceptions import ValidationError, DocumentNotFoundError, DocumentProcessingError, LLMProviderError
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -40,28 +41,28 @@ class ChatResponse(BaseModel):
 
 def validate_documents(db: Session, resume_id: str, jd_id: str):
     if resume_id == jd_id:
-        raise HTTPException(status_code=400, detail="Resume and Job Description cannot be the same document.")
+        raise ValidationError("Resume and Job Description cannot be the same document.")
         
     resume_doc = db.query(DocumentModel).filter(DocumentModel.id == resume_id).first()
     jd_doc = db.query(DocumentModel).filter(DocumentModel.id == jd_id).first()
     
     if not resume_doc or not jd_doc:
-        raise HTTPException(status_code=400, detail="One or both selected documents were not found.")
+        raise DocumentNotFoundError("One or both selected documents were not found.")
         
     if resume_doc.doc_type != DocumentType.RESUME.value:
-        raise HTTPException(status_code=400, detail=f"Document {resume_id} is not classified as a Resume.")
+        raise ValidationError(f"Document {resume_id} is not classified as a Resume.")
         
     if jd_doc.doc_type != DocumentType.JOB_DESCRIPTION.value:
-        raise HTTPException(status_code=400, detail=f"Document {jd_id} is not classified as a Job Description.")
+        raise ValidationError(f"Document {jd_id} is not classified as a Job Description.")
         
     resume_job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == resume_id).first()
     jd_job = db.query(DocumentProcessingJobModel).filter(DocumentProcessingJobModel.document_id == jd_id).first()
     
     if not resume_job or resume_job.status != ProcessingStatus.COMPLETED or not resume_job.indexed:
-        raise HTTPException(status_code=400, detail=f"Resume {resume_id} is not fully processed and indexed.")
+        raise DocumentProcessingError(f"Resume {resume_id} is not fully processed and indexed.")
         
     if not jd_job or jd_job.status != ProcessingStatus.COMPLETED or not jd_job.indexed:
-        raise HTTPException(status_code=400, detail=f"Job Description {jd_id} is not fully processed and indexed.")
+        raise DocumentProcessingError(f"Job Description {jd_id} is not fully processed and indexed.")
 
 @router.post("")
 async def chat(
@@ -100,8 +101,10 @@ async def chat(
             session_id=session.session_id,
             citations=[c.dict() for c in assistant_msg.citations]
         )
+    except (ValidationError, DocumentNotFoundError, DocumentProcessingError):
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise LLMProviderError(str(e))
 
 from fastapi.responses import StreamingResponse
 
@@ -125,8 +128,10 @@ async def chat_stream(
             collection_name=request.collection_name
         )
         return StreamingResponse(generator, media_type="text/event-stream")
+    except (ValidationError, DocumentNotFoundError, DocumentProcessingError):
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise LLMProviderError(str(e))
 
 @router.get("/{session_id}/history")
 async def get_history(session_id: str):
